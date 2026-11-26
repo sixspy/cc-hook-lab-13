@@ -24,47 +24,230 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>投递流水</h1>
+      <h1>投递流水 · 重试退避闸</h1>
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <p class="骨签">骨签 hook-13-重试退避闸 ｜ 路径甲：审计账册钉退避窗指纹 · 拒窗内回刷 ｜ 读窗与写尝试同事务同成败</p>
     </header>
 
 <section class="卷">
   <label>事件号</label><input id="事件号" placeholder="EVT-..."/>
-  <label><input type="checkbox" id="强制失败"/> 强制失败（测死信）</label>
+  <label><input type="checkbox" id="强制失败" style="width:auto"/> 强制失败（先造一笔失败，再立即连点）</label>
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="投递钮">签名投递一次</button>
   <button class="按钮 次" type="button" id="批量钮">批量重试待投</button>
+  <button class="按钮 次" type="button" id="查闸钮">查该事件退避闸</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>状态</th><th>响应码</th></tr></thead><tbody id="表"></tbody></table></div></section>
+
+<section class="卷" id="闸卡卷">
+  <h2>退避闸口</h2>
+  <div class="闸态行">
+    <span class="徽章" id="闸口徽章">未指定事件</span>
+    <span>窗指纹：<code class="指纹码" id="闸指纹">—</code></span>
+    <span class="说明" id="闸骨签"></span>
+  </div>
+  <div class="闸格">
+    <div class="卡 警" id="卡剩余"><small>退避剩余</small><b id="退避剩余">—</b></div>
+    <div class="卡"><small>尝试间隔</small><b id="尝试间隔">—</b></div>
+    <div class="卡"><small>已失败次数</small><b id="闸失败次数">—</b></div>
+    <div class="卡 开" id="卡允许"><small>现在能否再投</small><b id="闸允许">—</b></div>
+  </div>
+  <p class="说明" id="闸说明">输入事件号后点「查该事件退避闸」。失败一笔后，退避窗内的连点/并发回刷不会再写正式流水，只会在下方账册记一笔「窗内拦截」。</p>
+</section>
+
+<section class="卷">
+  <h2>投递流水对账</h2>
+  <p class="说明" id="对账结论">加载中…</p>
+  <div class="对账格" id="对账格"></div>
+</section>
+
+<section class="卷"><h2>正式投递尝试（窗外可投集落账）</h2><div class="表绕"><table><thead><tr>
+  <th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>状态/命运</th><th>响应码</th><th>投递时间</th><th>账册闸口</th><th>窗指纹</th>
+</tr></thead><tbody id="表"></tbody></table></div></section>
+
+<section class="卷"><h2>审计账册（含窗内拦截 · 指纹钉窗）</h2><div class="表绕"><table><thead><tr>
+  <th>时刻</th><th>闸口</th><th>结果</th><th>事件号</th><th>尝试号</th><th>间隔秒</th><th>剩余秒</th><th>窗指纹</th><th>详情</th>
+</tr></thead><tbody id="账册表"></tbody></table></div></section>
 
   </main>
 
 <script>
-async function 刷表() {
-  const rows = await 投递台.getJSON('/api/投递');
-  const tb = document.getElementById('表'); tb.innerHTML='';
-  for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.尝试号)+'</td><td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.签名摘要)+'</td><td></td><td>'+投递台.安全文本(r.响应码)+'</td>');
-    tr.children[4].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
+let 倒计时柄 = null;
+
+function 停倒计时() { if (倒计时柄) { clearInterval(倒计时柄); 倒计时柄 = null; } }
+
+function 渲染闸(st) {
+  const badge = document.getElementById('闸口徽章');
+  const 剩卡 = document.getElementById('卡剩余');
+  const 允卡 = document.getElementById('卡允许');
+  if (!st) {
+    badge.textContent = '未查询'; badge.className = '徽章';
+    document.getElementById('闸指纹').textContent = '—';
+    document.getElementById('退避剩余').textContent = '—';
+    document.getElementById('尝试间隔').textContent = '—';
+    document.getElementById('闸失败次数').textContent = '—';
+    document.getElementById('闸允许').textContent = '—';
+    return;
+  }
+  const 窗内 = !!st.在窗内;
+  badge.textContent = st.闸口 || (窗内 ? '退避拦截' : '可投递');
+  badge.className = '徽章 ' + (窗内 ? '退避拦截' : (st.失败次数 ? '窗已开' : '首投'));
+  document.getElementById('闸指纹').textContent = st.窗指纹 || '（首投尚无窗）';
+  document.getElementById('尝试间隔').textContent = st.尝试间隔 || (st.尝试间隔秒 + ' 秒');
+  document.getElementById('闸失败次数').textContent = st.失败次数 ?? 0;
+  document.getElementById('闸允许').textContent = 窗内 ? '否·闸住' : '是·可投';
+  document.getElementById('退避剩余').textContent = st.退避剩余 || (st.退避剩余秒 + ' 秒');
+  document.getElementById('闸骨签').textContent = st.骨签 ? ('骨签 ' + st.骨签) : '';
+  剩卡.className = '卡 ' + (窗内 ? '警' : '开');
+  允卡.className = '卡 ' + (窗内 ? '警' : '开');
+  document.getElementById('闸说明').textContent =
+    (窗内 ? '闸口关闭中：窗内再点只会被记为拦截，不会写出第二笔失败尝试。'
+          : '闸口开启：下一笔投递可正常落账；若再失败会重开一扇退避窗。') +
+    ' 工程形态：' + (st.工程形态 || '路径甲');
+
+  // 本地倒计时，归零后自动向后端复核（以服务端退避窗为准）
+  停倒计时();
+  let 剩 = parseInt(st.退避剩余秒 || 0, 10) || 0;
+  if (窗内 && 剩 > 0) {
+    倒计时柄 = setInterval(async () => {
+      剩 -= 1;
+      if (剩 > 0) {
+        document.getElementById('退避剩余').textContent = '约 ' + 剩 + ' 秒';
+      } else {
+        停倒计时();
+        document.getElementById('退避剩余').textContent = '0 秒（复核中…）';
+        await 刷闸(true);
+      }
+    }, 1000);
   }
 }
+
+async function 刷闸(静默) {
+  const eid = document.getElementById('事件号').value.trim();
+  if (!eid) { 渲染闸(null); return null; }
+  try {
+    const st = await 投递台.getJSON('/api/退避?事件号=' + encodeURIComponent(eid));
+    渲染闸(st);
+    return st;
+  } catch (e) {
+    if (!静默) document.getElementById('消息').textContent = e.message;
+    return null;
+  }
+}
+
+function 卡(键, 值, 提示) {
+  return '<div class="k"><small>' + 投递台.安全文本(键) + '</small><b>' +
+         投递台.安全文本(值) + '</b>' + (提示 ? '<small>' + 投递台.安全文本(提示) + '</small>' : '') + '</div>';
+}
+
+async function 刷对账() {
+  const eid = document.getElementById('事件号').value.trim();
+  const url = '/api/流水对账' + (eid ? '?事件号=' + encodeURIComponent(eid) : '');
+  const r = await 投递台.getJSON(url);
+  document.getElementById('对账结论').textContent =
+    (eid ? ('事件 ' + eid + '：') : '全量：') + (r.结论 || '') +
+    ' ｜ 对齐=' + (r.对齐 ? '是' : '否') + ' ｜ 影子/正式同票=' + (r.影子正式同票 ? '是' : '否');
+  document.getElementById('对账格').innerHTML = [
+    卡('正式尝试', r.正式尝试数 ?? 0),
+    卡('正式失败', r.正式失败数 ?? 0),
+    卡('合法重试', r.合法重试数 ?? 0, '越窗才计入'),
+    卡('窗内连打', r.窗内连打数 ?? 0, '拦截+' + (r.非法落账数 ?? 0) + ' 非法落账'),
+    卡('审计拦截', r.窗内连打拦截数 ?? r.审计拦截数 ?? 0),
+    卡('非法落账', r.非法落账数 ?? 0, '对账须为 0'),
+    卡('同票', r.影子正式同票 ? '是' : '否', '缺影子 ' + (r.正式缺影子数 ?? 0)),
+  ].join('');
+}
+
+async function 刷表() {
+  const rows = await 投递台.getJSON('/api/投递');
+  const tb = document.getElementById('表'); tb.innerHTML = '';
+  for (const r of rows) {
+    const tr = 投递台.行(
+      '<td>' + 投递台.安全文本(r.尝试号) + '</td>' +
+      '<td><a href="/事件详情.html?事件号=' + encodeURIComponent(r.事件号) + '">' + 投递台.安全文本(r.事件号) + '</a></td>' +
+      '<td>' + 投递台.安全文本(r.端点键) + '</td>' +
+      '<td>' + 投递台.安全文本(r.签名摘要) + '</td>' +
+      '<td class="状态格"></td>' +
+      '<td>' + 投递台.安全文本(r.响应码) + '</td>' +
+      '<td>' + 投递台.安全文本(r.投递时) + '</td>' +
+      '<td class="账册格"></td>' +
+      '<td><code class="指纹码">' + 投递台.安全文本(r.窗指纹 || '') + '</code></td>'
+    );
+    tr.children[4].appendChild(投递台.徽章(r.状态));
+    if (r.账册闸口) tr.children[7].appendChild(投递台.徽章(r.账册闸口));
+    tb.appendChild(tr);
+  }
+}
+
+async function 刷账册() {
+  const eid = document.getElementById('事件号').value.trim();
+  const url = '/api/账册' + (eid ? '?事件号=' + encodeURIComponent(eid) : '');
+  const r = await 投递台.getJSON(url);
+  const tb = document.getElementById('账册表'); tb.innerHTML = '';
+  for (const z of (r.账册 || [])) {
+    const tr = 投递台.行(
+      '<td>' + 投递台.安全文本(z.时刻) + '</td><td class="闸"></td><td>' + 投递台.安全文本(z.结果) + '</td>' +
+      '<td><a href="/事件详情.html?事件号=' + encodeURIComponent(z.事件号) + '">' + 投递台.安全文本(z.事件号) + '</a></td>' +
+      '<td>' + 投递台.安全文本(z.尝试号 || '—') + '</td><td>' + 投递台.安全文本(z.尝试间隔秒) + '</td>' +
+      '<td>' + 投递台.安全文本(z.退避剩余秒) + '</td>' +
+      '<td><code class="指纹码">' + 投递台.安全文本(z.窗指纹) + '</code></td>' +
+      '<td>' + 投递台.安全文本(z.详情) + '</td>'
+    );
+    tr.children[1].appendChild(投递台.徽章(z.闸口));
+    if (z.闸口 === '窗内拦截') tr.className = '行拦截';
+    tb.appendChild(tr);
+  }
+}
+
+async function 刷全部() {
+  await Promise.all([刷表(), 刷账册(), 刷对账(), 刷闸(true)]);
+}
+
 document.getElementById('投递钮').onclick = async () => {
   const 消息 = document.getElementById('消息');
+  消息.textContent = '';
   try {
     const rep = await 投递台.postJSON('/api/投递', {
-      事件号: document.getElementById('事件号').value,
+      事件号: document.getElementById('事件号').value.trim(),
       强制失败: document.getElementById('强制失败').checked,
     });
-    消息.textContent = JSON.stringify(rep);
-    await 刷表();
-  } catch (e) { 消息.textContent = e.message; }
+    消息.style.color = 'var(--好)';
+    消息.textContent = (rep.闸口 || rep.状态 || '已投递') + '｜尝试号 ' + (rep.尝试号 || '—') +
+      (rep.尝试间隔 ? '｜尝试间隔 ' + rep.尝试间隔 : '');
+    if (rep.退避剩余秒 != null) 渲染闸({
+      在窗内: rep.状态 === '失败', 闸口: rep.闸口, 窗指纹: rep.窗指纹,
+      尝试间隔: rep.尝试间隔, 尝试间隔秒: rep.尝试间隔秒, 失败次数: rep.失败次数,
+      退避剩余: rep.退避剩余, 退避剩余秒: rep.退避剩余秒, 骨签: rep.骨签,
+      工程形态: '路径甲',
+    });
+  } catch (e) {
+    消息.style.color = 'var(--险)';
+    消息.textContent = e.message;
+    if (e.data) 渲染闸(e.data);
+  }
+  await 刷全部();
 };
+
 document.getElementById('批量钮').onclick = async () => {
   const rep = await 投递台.postJSON('/api/投递/批量重试', {});
-  document.getElementById('消息').textContent = '批量 '+rep.条数;
-  await 刷表();
+  document.getElementById('消息').style.color = 'var(--靛)';
+  document.getElementById('消息').textContent =
+    '批量 ' + rep.条数 + '：放行 ' + (rep.放行 ?? 0) + '，退避跳过 ' + (rep.退避跳过 ?? 0) +
+    '，错误 ' + (rep.错误 ?? 0);
+  await 刷全部();
 };
-刷表();
+
+document.getElementById('查闸钮').onclick = async () => {
+  await 刷全部();
+};
+
+// 输入事件号后回车即查
+document.getElementById('事件号').addEventListener('keydown', (e) => { if (e.key === 'Enter') 刷全部(); });
+
+// 从事件详情/队列带参跳来：预填事件号
+const qid = new URLSearchParams(location.search).get('事件号');
+if (qid) document.getElementById('事件号').value = qid;
+
+刷全部();
 </script>
 
 </body>

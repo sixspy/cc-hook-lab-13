@@ -24,25 +24,69 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>事件详情</h1>
+      <h1>事件详情 · 中文命运与退避闸</h1>
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
 
 <section class="卷">
   <label>事件号</label><input id="事件号"/>
   <button class="按钮" type="button" id="查">查询</button>
-  <pre id="出" class="说明"></pre>
+  <button class="按钮 次" type="button" id="去流水">去投递流水连点</button>
+  <p class="消息" id="消息"></p>
 </section>
+
+<section class="卷" id="闸卷" style="display:none">
+  <h2>退避闸口</h2>
+  <div class="闸态行"><span class="徽章" id="闸徽章"></span>
+    <span>窗指纹 <code class="指纹码" id="闸指纹"></code></span></div>
+  <div class="闸格">
+    <div class="卡 警" id="卡剩"><small>退避剩余</small><b id="退避剩余">—</b></div>
+    <div class="卡"><small>尝试间隔</small><b id="尝试间隔">—</b></div>
+    <div class="卡"><small>失败次数</small><b id="失败次数">—</b></div>
+    <div class="卡 开" id="卡允"><small>能否再投</small><b id="允许">—</b></div>
+  </div>
+</section>
+
+<section class="卷"><h2>事件 JSON（含尝试 / 死信 / 退避同票数据）</h2><pre id="出" class="说明"></pre></section>
 
   </main>
 
 <script>
-document.getElementById('查').onclick = async () => {
+function 渲染闸(g) {
+  if (!g) { document.getElementById('闸卷').style.display = 'none'; return; }
+  document.getElementById('闸卷').style.display = '';
+  const 窗内 = !!g.在窗内;
+  const b = document.getElementById('闸徽章');
+  b.textContent = g.闸口; b.className = '徽章 ' + (窗内 ? '退避拦截' : (g.失败次数 ? '窗已开' : '首投'));
+  document.getElementById('闸指纹').textContent = g.窗指纹 || '（首投尚无窗）';
+  document.getElementById('退避剩余').textContent = g.退避剩余 || (g.退避剩余秒 + ' 秒');
+  document.getElementById('尝试间隔').textContent = g.尝试间隔 || (g.尝试间隔秒 + ' 秒');
+  document.getElementById('失败次数').textContent = g.失败次数 ?? 0;
+  document.getElementById('允许').textContent = 窗内 ? '否·闸住' : '是·可投';
+  document.getElementById('卡剩').className = '卡 ' + (窗内 ? '警' : '开');
+  document.getElementById('卡允').className = '卡 ' + (窗内 ? '警' : '开');
+}
+async function 查询() {
+  const id = document.getElementById('事件号').value.trim();
+  if (!id) return;
+  history.replaceState(null, '', '?事件号=' + encodeURIComponent(id));
   try {
-    const id = document.getElementById('事件号').value;
-    document.getElementById('出').textContent = JSON.stringify(await 投递台.getJSON('/api/事件/'+encodeURIComponent(id)), null, 2);
-  } catch (e) { document.getElementById('出').textContent = e.message; }
+    const d = await 投递台.getJSON('/api/事件/' + encodeURIComponent(id));
+    document.getElementById('出').textContent = JSON.stringify(d, null, 2);
+    渲染闸(d.退避);
+  } catch (e) {
+    document.getElementById('消息').textContent = e.message;
+    document.getElementById('出').textContent = '';
+  }
+}
+document.getElementById('查').onclick = 查询;
+document.getElementById('去流水').onclick = () => {
+  const id = document.getElementById('事件号').value.trim();
+  location.href = '/投递流水.html' + (id ? '?事件号=' + encodeURIComponent(id) : '');
 };
+document.getElementById('事件号').addEventListener('keydown', e => { if (e.key === 'Enter') 查询(); });
+const q = new URLSearchParams(location.search).get('事件号');
+if (q) { document.getElementById('事件号').value = q; 查询(); }
 </script>
 
 </body>

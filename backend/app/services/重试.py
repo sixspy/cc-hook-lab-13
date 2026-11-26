@@ -13,9 +13,25 @@ def 批量重试待投(限制: int = 20) -> dict:
     finally:
         conn.close()
     outs = []
+    放行 = 0
+    退避跳过 = 0
+    错误 = 0
     for r in rows:
         try:
-            outs.append(投递.投递一次(r["事件号"]))
+            out = 投递.投递一次(r["事件号"])
+            outs.append(out)
+            if out.get("退避拦截"):
+                退避跳过 += 1
+            else:
+                放行 += 1
         except ValueError as e:
+            错误 += 1
             outs.append({"事件号": r["事件号"], "错误": str(e)})
-    return {"条数": len(outs), "结果": outs, "签名规": 签名目录.签名规()}
+    return {
+        "条数": len(outs),
+        "结果": outs,
+        "放行": 放行,
+        "退避跳过": 退避跳过,
+        "错误": 错误,
+        "签名规": 签名目录.签名规(),
+    }

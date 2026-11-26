@@ -36,7 +36,7 @@
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="登记">登记端点</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>端点键</th><th>名称</th><th>回调URL</th><th>密钥版本</th><th>启用</th><th>操作</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷"><div class="表绕"><table><thead><tr><th>端点键</th><th>名称</th><th>回调URL</th><th>密钥版本</th><th>启用</th><th>事件数</th><th>尝试数</th><th>待处置死信</th><th>操作</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
@@ -45,12 +45,12 @@ async function 刷表() {
   const rows = await 投递台.getJSON('/api/端点');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.名称)+'</td><td>'+投递台.安全文本(r.回调URL)+'</td><td>'+投递台.安全文本(r.密钥版本)+'</td><td></td><td></td>');
+    const tr = 投递台.行('<td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.名称)+'</td><td>'+投递台.安全文本(r.回调URL)+'</td><td>'+投递台.安全文本(r.密钥版本)+'</td><td></td><td>'+投递台.安全文本(r.事件数 ?? 0)+'</td><td>'+投递台.安全文本(r.尝试数 ?? 0)+'</td><td>'+投递台.安全文本(r.待处置死信 ?? 0)+'</td><td></td>');
     tr.children[4].appendChild(投递台.徽章(r.启用 ? '启用' : '停用'));
     const btn = document.createElement('button'); btn.className='按钮 次'; btn.type='button';
     btn.textContent = r.启用 ? '停用' : '启用';
     btn.onclick = async () => { await 投递台.postJSON('/api/端点/启用', {端点键:r.端点键, 启用: !r.启用}); await 刷表(); };
-    tr.children[5].appendChild(btn); tb.appendChild(tr);
+    tr.children[8].appendChild(btn); tb.appendChild(tr);
   }
 }
 document.getElementById('登记').onclick = async () => {

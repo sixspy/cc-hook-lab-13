@@ -33,6 +33,7 @@
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="重投钮">死信重投</button>
   <button class="按钮 次" type="button" id="作废钮">作废</button>
+  <p class="说明">人工「死信重投」会在审计账册钉一枚「人工开窗」标记，立即作废旧退避窗，可马上再投；若重投再失败，会另开一扇新退避窗。</p>
 </section>
 <section class="卷"><div class="表绕"><table><thead><tr><th>死信号</th><th>事件号</th><th>端点键</th><th>失败次数</th><th>末次原因</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
@@ -43,7 +44,7 @@ async function 刷表() {
   const rows = await 投递台.getJSON('/api/死信');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.死信号)+'</td><td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.失败次数)+'</td><td>'+投递台.安全文本(r.末次原因)+'</td><td></td>');
+    const tr = 投递台.行('<td>'+投递台.安全文本(r.死信号)+'</td><td><a href="/事件详情.html?事件号='+encodeURIComponent(r.事件号)+'">'+投递台.安全文本(r.事件号)+'</a></td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.失败次数)+'</td><td>'+投递台.安全文本(r.末次原因)+'</td><td></td>');
     tr.children[5].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
   }
 }

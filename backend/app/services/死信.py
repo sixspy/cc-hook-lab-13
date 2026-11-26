@@ -1,7 +1,7 @@
 from __future__ import annotations
 from app.db import 连接
 from app.services.时间 import 此刻
-from app.services import 投递
+from app.services import 投递, 退避闸
 
 
 def 作废(事件号: str, 原因: str = "人工作废") -> dict:
@@ -34,8 +34,10 @@ def 重投(事件号: str) -> dict:
             raise ValueError("死信已处置")
         conn.execute("UPDATE 死信 SET 状态=? WHERE 事件号=?", ("已重投", 事件号))
         conn.execute("UPDATE 事件 SET 状态=?, 更新时=? WHERE 事件号=?", ("待投", t, 事件号))
+        # 人工重投是操作员显式动作：钉「人工开窗」作废旧退避窗，好让页面立即点得动
+        开窗 = 退避闸.人工开窗(conn, 事件号)
         conn.execute("INSERT INTO 操作留痕(时刻,操作,事件号,详情) VALUES (?,?,?,?)",
-                     (t, "死信重投", 事件号, "回待投"))
+                     (t, "死信重投", 事件号, "回待投；人工开窗 " + 开窗["窗指纹"]))
         conn.commit()
     finally:
         conn.close()

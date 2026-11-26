@@ -24,11 +24,30 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>签名规</h1>
+      <h1>签名规 · 重试退避策略</h1>
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <p class="骨签">骨签 hook-13-重试退避闸 ｜ 退避窗与签名规同票，改这里立即作用于投递闸口与流水对账</p>
     </header>
 
 <section class="卷">
+  <h2>重试退避策略（中文闸口）</h2>
+  <p class="说明">
+    规则：一笔投递失败后进入<strong>退避窗</strong>，窗内不得再投；窗内连点/并发回刷会被记为
+    「退避拦截」且不写正式流水。第 N 笔失败后的<strong>尝试间隔</strong> ＝
+    min(退避秒 × 退避倍数<sup>N−1</sup>，退避上限秒)。退避倍数为 1 即固定间隔；退避秒设 0 为显式关闸。
+  </p>
+  <div class="闸格">
+    <div class="卡"><small>尝试间隔基数 · 退避秒</small><input id="退避秒" inputmode="numeric"/></div>
+    <div class="卡"><small>退避倍数（1=固定窗）</small><input id="退避倍数" inputmode="decimal"/></div>
+    <div class="卡"><small>退避上限秒</small><input id="退避上限秒" inputmode="numeric"/></div>
+    <div class="卡"><small>最大重试（耗尽入死信）</small><input id="最大重试" inputmode="numeric"/></div>
+  </div>
+  <p class="消息" id="策略消息"></p>
+  <button class="按钮" type="button" id="存策略">保存退避策略</button>
+</section>
+
+<section class="卷">
+  <h2>通用签名规键值</h2>
   <label>键</label><input id="键" placeholder="最大重试"/>
   <label>值</label><input id="值"/>
   <p class="消息" id="消息"></p>
@@ -39,9 +58,29 @@
   </main>
 
 <script>
+const 策略键 = ['退避秒', '退避倍数', '退避上限秒', '最大重试'];
 async function 刷() {
-  document.getElementById('规').textContent = JSON.stringify(await 投递台.getJSON('/api/签名规'), null, 2);
+  const 规 = await 投递台.getJSON('/api/签名规');
+  document.getElementById('规').textContent = JSON.stringify(规, null, 2);
+  for (const k of 策略键) {
+    const el = document.getElementById(k);
+    if (el && document.activeElement !== el) el.value = 规[k] ?? '';
+  }
 }
+document.getElementById('存策略').onclick = async () => {
+  const 消息 = document.getElementById('策略消息');
+  const body = {};
+  for (const k of 策略键) body[k] = document.getElementById(k).value;
+  try {
+    await 投递台.postJSON('/api/签名规', body);
+    消息.style.color = 'var(--好)';
+    消息.textContent = '退避策略已保存，投递闸口与流水对账即刻同票生效。';
+    await 刷();
+  } catch (e) {
+    消息.style.color = 'var(--险)';
+    消息.textContent = e.message;
+  }
+};
 document.getElementById('保存').onclick = async () => {
   try {
     const k = document.getElementById('键').value;

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from app.db import 连接
-from app.services import 校验
+from app.services import 校验, 退避闸
 
 
 def 签名规() -> dict:
@@ -43,6 +43,7 @@ def 概览() -> dict:
             "死信": c("SELECT COUNT(*) FROM 事件 WHERE 状态='死信'"),
             "尝试数": c("SELECT COUNT(*) FROM 投递尝试"),
             "死信匣": c("SELECT COUNT(*) FROM 死信 WHERE 状态='待处置'"),
+            "退避拦截": c("SELECT COUNT(*) FROM 退避账册 WHERE 闸口='窗内拦截'"),
             "签名规": 签名规(),
         }
     finally:
@@ -52,7 +53,16 @@ def 概览() -> dict:
 def 事件列表() -> list:
     conn = 连接()
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM 事件 ORDER BY 入队时 DESC").fetchall()]
+        rows = conn.execute("SELECT * FROM 事件 ORDER BY 入队时 DESC").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["退避"] = 退避闸.窗状态(d["事件号"], conn=conn)
+            except Exception:
+                d["退避"] = None
+            out.append(d)
+        return out
     finally:
         conn.close()
 
@@ -69,6 +79,7 @@ def 事件一条(事件号: str) -> dict | None:
         ).fetchall()]
         dl = conn.execute("SELECT * FROM 死信 WHERE 事件号=?", (事件号,)).fetchone()
         d["死信"] = dict(dl) if dl else None
+        d["退避"] = 退避闸.窗状态(事件号, conn=conn)
         return d
     finally:
         conn.close()
@@ -78,7 +89,15 @@ def 投递列表() -> list:
     conn = 连接()
     try:
         return [dict(r) for r in conn.execute(
-            "SELECT * FROM 投递尝试 ORDER BY 投递时 DESC LIMIT 200"
+            """
+            SELECT a.*,
+                   (SELECT z.闸口 FROM 退避账册 z
+                      WHERE z.尝试号 = a.尝试号 AND z.闸口 = '放行落账' LIMIT 1) AS 账册闸口,
+                   (SELECT z.窗指纹 FROM 退避账册 z
+                      WHERE z.尝试号 = a.尝试号 AND z.闸口 = '放行落账' LIMIT 1) AS 窗指纹
+            FROM 投递尝试 a
+            ORDER BY a.rowid DESC LIMIT 200
+            """
         ).fetchall()]
     finally:
         conn.close()
@@ -95,7 +114,17 @@ def 死信列表() -> list:
 def 端点列表() -> list:
     conn = 连接()
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM 投递端点 ORDER BY 端点键").fetchall()]
+        return [dict(r) for r in conn.execute(
+            """
+            SELECT e.*,
+                   (SELECT COUNT(*) FROM 事件 v WHERE v.端点键 = e.端点键) AS 事件数,
+                   (SELECT COUNT(*) FROM 投递尝试 a WHERE a.端点键 = e.端点键) AS 尝试数,
+                   (SELECT COUNT(*) FROM 死信 d
+                      WHERE d.端点键 = e.端点键 AND d.状态 = '待处置') AS 待处置死信
+            FROM 投递端点 e
+            ORDER BY e.端点键
+            """
+        ).fetchall()]
     finally:
         conn.close()
 

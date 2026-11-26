@@ -37,7 +37,7 @@
   <button class="按钮" type="button" id="入队钮">入队（待投）</button>
   <button class="按钮 次" type="button" id="夹具钮">灌夹具样例</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>载荷摘要</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷"><div class="表绕"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>载荷摘要</th><th>状态/命运</th><th>退避闸</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
@@ -46,8 +46,26 @@ async function 刷表() {
   const rows = await 投递台.getJSON('/api/事件');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.载荷摘要)+'</td><td></td>');
-    tr.children[4].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
+    const tr = 投递台.行('<td><a href="/事件详情.html?事件号='+encodeURIComponent(r.事件号)+'">'+投递台.安全文本(r.事件号)+'</a></td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.载荷摘要)+'</td><td></td><td class="闸格单"></td>');
+    tr.children[4].appendChild(投递台.徽章(r.状态));
+    const g = r.退避;
+    const gd = tr.children[5];
+    if (g) {
+      const key = g.在窗内 ? '退避拦截' : (g.失败次数 ? '窗已开' : '首投');
+      gd.appendChild(投递台.徽章(key));
+      if (g.在窗内) {
+        const s = document.createElement('small');
+        s.textContent = ' 剩 ' + g.退避剩余秒 + 's / 间隔 ' + g.尝试间隔秒 + 's';
+        gd.appendChild(s);
+      } else if (g.失败次数) {
+        const s = document.createElement('small');
+        s.textContent = ' 间隔 ' + g.尝试间隔秒 + 's';
+        gd.appendChild(s);
+      }
+    } else {
+      gd.textContent = '—';
+    }
+    tb.appendChild(tr);
   }
 }
 document.getElementById('入队钮').onclick = async () => {

@@ -24,19 +24,35 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>投递互证</h1>
+      <h1>投递互证 · 账实同源</h1>
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <p class="骨签">骨签 hook-13-重试退避闸 ｜ 事件/正式流水/审计账册/死信匣联查，影子与正式同票</p>
     </header>
 
 <section class="卷">
-  <button class="按钮" type="button" id="跑">跑互证</button>
+  <h2>投递流水对账（认退避窗）</h2>
+  <label>事件号（留空 = 全量）</label><input id="事件号" placeholder="EVT-..."/>
+  <button class="按钮" type="button" id="对账钮">查流水对账</button>
+  <p class="说明" id="对账结论"></p>
+  <div class="对账格" id="对账格"></div>
+  <div class="表绕"><table><thead><tr>
+    <th>尝试号</th><th>状态</th><th>分类</th><th>是否合法</th><th>距上一失败秒</th><th>要求间隔秒</th><th>投递时</th>
+  </tr></thead><tbody id="流水表"></tbody></table></div>
+</section>
+
+<section class="卷">
+  <button class="按钮" type="button" id="跑">跑互证（含退避对账）</button>
   <pre id="出" class="说明"></pre>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th><th>对齐</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷"><h2>互证批次</h2><div class="表绕"><table><thead><tr><th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th><th>对齐</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
 <script>
+function 卡(k,v,hint){
+  return '<div class="k"><small>'+投递台.安全文本(k)+'</small><b>'+投递台.安全文本(v)+'</b>'+
+         (hint?'<small>'+投递台.安全文本(hint)+'</small>':'')+'</div>';
+}
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/互证');
   const tb = document.getElementById('表'); tb.innerHTML='';
@@ -44,11 +60,45 @@ async function 刷表() {
     tb.appendChild(投递台.行('<td>'+r.批次号+'</td><td>'+投递台.安全文本(r.时刻)+'</td><td>'+r.事件总数+'</td><td>'+r.已投递数+'</td><td>'+r.死信数+'</td><td>'+r.待投数+'</td><td>'+(r.是否对齐?'是':'否')+'</td><td>'+投递台.安全文本(r.说明)+'</td>'));
   }
 }
+async function 查对账() {
+  const eid = document.getElementById('事件号').value.trim();
+  const r = await 投递台.getJSON('/api/流水对账' + (eid ? '?事件号='+encodeURIComponent(eid) : ''));
+  document.getElementById('对账结论').textContent =
+    (eid ? '事件 '+eid : '全量') + '：' + (r.结论 || '') +
+    ' ｜ 对齐=' + (r.对齐 ? '是' : '否') + ' ｜ 同票=' + (r.影子正式同票 ? '是' : '否');
+  document.getElementById('对账格').innerHTML = [
+    卡('正式尝试', r.正式尝试数 ?? '—'),
+    卡('合法重试', r.合法重试数 ?? 0),
+    卡('窗内连打', r.窗内连打数 ?? 0),
+    卡('审计拦截', r.窗内连打拦截数 ?? r.审计拦截数 ?? 0),
+    卡('非法落账', r.非法落账数 ?? 0),
+    卡('同票', r.影子正式同票 ? '是' : '否'),
+  ].join('');
+  const tb = document.getElementById('流水表'); tb.innerHTML='';
+  for (const x of (r.流水 || [])) {
+    const tr = 投递台.行(
+      '<td>'+投递台.安全文本(x.尝试号)+'</td><td class="st"></td><td class="cat"></td>'+
+      '<td>'+(x.合法 ? '合法' : '非法')+'</td>'+
+      '<td>'+投递台.安全文本(x.距上一失败秒 ?? '—')+'</td>'+
+      '<td>'+投递台.安全文本(x.要求间隔秒 ?? '—')+'</td>'+
+      '<td>'+投递台.安全文本(x.投递时)+'</td>');
+    tr.children[1].appendChild(投递台.徽章(x.状态));
+    tr.children[2].appendChild(投递台.徽章(x.分类));
+    if (x.分类 === '窗内连打') tr.className = '行拦截';
+    if (x.分类 === '合法重试' || x.分类 === '首投' || x.分类 === '人工开窗后重投') tr.className = '行合法';
+    tb.appendChild(tr);
+  }
+}
+document.getElementById('对账钮').onclick = 查对账;
 document.getElementById('跑').onclick = async () => {
   document.getElementById('出').textContent = JSON.stringify(await 投递台.postJSON('/api/互证/跑',{}), null, 2);
   await 刷表();
+  await 查对账().catch(()=>{});
 };
+const q = new URLSearchParams(location.search).get('事件号');
+if (q) document.getElementById('事件号').value = q;
 刷表();
+查对账().catch(e => { document.getElementById('对账结论').textContent = e.message; });
 </script>
 
 </body>

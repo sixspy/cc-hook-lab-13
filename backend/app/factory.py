@@ -4,7 +4,7 @@ from pathlib import Path
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from app import seed
-from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录
+from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录, 退避闸
 
 _STATIC = Path(__file__).resolve().parent / "static"
 
@@ -97,9 +97,36 @@ def create_app() -> Flask:
     def api_投递():
         body = request.get_json(force=True, silent=True) or {}
         try:
-            return jsonify(投递.投递一次(body["事件号"], bool(body.get("强制失败"))))
+            rep = 投递.投递一次(body["事件号"], bool(body.get("强制失败")))
         except (KeyError, ValueError) as e:
             return jsonify({"错误": str(e)}), 400
+        if rep.get("退避拦截"):
+            # 429 + Retry-After：语义化告知退避窗剩余，页面/并发脚本都读这份同票数据
+            resp = jsonify(rep)
+            resp.status_code = 429
+            resp.headers["Retry-After"] = str(max(1, int(rep.get("退避剩余秒") or 1)))
+            return resp
+        return jsonify(rep)
+
+    @app.get("/api/退避")
+    def api_退避():
+        eid = str(request.args.get("事件号") or "").strip()
+        if not eid:
+            return jsonify({"错误": "缺事件号"}), 400
+        st = 退避闸.窗状态(eid)
+        if st is None:
+            return jsonify({"错误": "无此事件"}), 404
+        return jsonify(st)
+
+    @app.get("/api/账册")
+    def api_账册():
+        eid = str(request.args.get("事件号") or "").strip() or None
+        return jsonify({"账册": 退避闸.账册列表(eid)})
+
+    @app.get("/api/流水对账")
+    def api_流水对账():
+        eid = str(request.args.get("事件号") or "").strip() or None
+        return jsonify(互证.投递流水对账(eid))
 
     @app.post("/api/投递/批量重试")
     def api_批量重试():

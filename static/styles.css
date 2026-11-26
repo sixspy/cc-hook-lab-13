@@ -123,3 +123,27 @@
     .登录壳 { grid-template-columns: 1fr; }
     .登录左 { padding: 28px; }
   }
+
+  /* ===== hook-13 重试退避闸 ===== */
+  .徽章.失败, .徽章.死信, .徽章.窗内连打, .徽章.非法落账 { background: #fee2e2; color: var(--险); }
+  .徽章.成功, .徽章.合法重试, .徽章.人工开窗后重投 { background: #d1fae5; color: var(--好); }
+  .徽章.退避拦截, .徽章.窗内拦截 { background: #ffe4e6; color: #be123c; }
+  .徽章.放行落账, .徽章.首投 { background: #dbeafe; color: #1e40af; }
+  .徽章.人工开窗, .徽章.窗已开 { background: #fef3c7; color: #92400e; }
+  .骨签 { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 12px; color: var(--靛浅); opacity: .85; margin: 2px 0 8px; }
+  .闸格 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 10px 0; }
+  .闸格 .卡 { background: #fff; border: 1px solid var(--边); border-left: 4px solid var(--靛);
+              border-radius: 8px; padding: 10px 12px; }
+  .闸格 .卡.警 { border-left-color: #be123c; }
+  .闸格 .卡.开 { border-left-color: var(--好); }
+  .闸格 small { display: block; color: #6b5b4f; font-size: 12px; margin-bottom: 4px; }
+  .闸格 b { font-size: 1.25rem; color: var(--靛); }
+  .闸态行 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  .指纹码 { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+            background: #f1e9dc; padding: 2px 6px; border-radius: 5px; }
+  .对账格 { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 10px; margin: 8px 0; }
+  .对账格 .k { background:#fff; border:1px solid var(--边); border-radius:8px; padding:8px 10px; }
+  .对账格 .k b { display:block; font-size:1.15rem; color:var(--靛); }
+  .行拦截 { background: #fff1f2; }
+  .行合法 { background: #f0fdf4; }

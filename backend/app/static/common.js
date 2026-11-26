@@ -3,7 +3,13 @@ const 投递台 = {
     const r = await fetch(url, opt);
     if (r.status === 401) { location.href = '/login'; throw new Error('未登录'); }
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.错误 || data.error || r.statusText);
+    if (!r.ok) {
+      const err = new Error(data.错误 || data.error || r.statusText);
+      err.data = data;
+      err.status = r.status;
+      err.retryAfter = r.headers.get('Retry-After');
+      throw err;
+    }
     return data;
   },
   async postJSON(url, body) {
